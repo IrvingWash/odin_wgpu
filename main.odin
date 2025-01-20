@@ -43,6 +43,11 @@ main :: proc() {
 	}
 	device := request_device_sync(adapter, &device_descriptor)
 	defer wgpu.DeviceRelease(device)
+
+	// Command Queue is a queue through which the CPU sends commands to the GPU
+	// The queue should be gotten only once
+	queue := wgpu.DeviceGetQueue(device)
+	defer wgpu.QueueRelease(queue)
 }
 
 request_adapter_sync :: proc(
