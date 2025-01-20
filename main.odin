@@ -4,6 +4,7 @@ import "base:runtime"
 import "core:fmt"
 import "vendor:glfw"
 import "vendor:wgpu"
+import "vendor:wgpu/glfwglue"
 
 main :: proc() {
 	app := Application{}
@@ -19,12 +20,24 @@ main :: proc() {
 ctx: runtime.Context
 
 Application :: struct {
-	window: glfw.WindowHandle,
-	device: wgpu.Device,
-	queue:  wgpu.Queue,
+	window:  glfw.WindowHandle,
+	device:  wgpu.Device,
+	queue:   wgpu.Queue,
+	surface: wgpu.Surface,
 }
 
 app_init :: proc(app: ^Application) {
+	// Init GLFW
+	if !glfw.Init() {
+		panic("Failed to initialize GLFW")
+	}
+	glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
+	glfw.WindowHint(glfw.RESIZABLE, false)
+	app.window = glfw.CreateWindow(640, 480, "Learn WGPU", nil, nil)
+	if app.window == nil {
+		panic("Failed to create window")
+	}
+
 	// Get an instance to begin working with WGPU
 	instance_descriptor := wgpu.InstanceDescriptor{}
 	instance := wgpu.CreateInstance(&instance_descriptor)
@@ -33,8 +46,14 @@ app_init :: proc(app: ^Application) {
 	}
 	defer wgpu.InstanceRelease(instance)
 
+	// Get the surface to draw on
+	app.surface = glfwglue.GetSurface(instance, app.window)
+
 	// Get an adapter - the representation of the hardware GPU
-	adapter := request_adapter_sync(instance, &{})
+	adapter_options := wgpu.RequestAdapterOptions {
+		compatibleSurface = app.surface,
+	}
+	adapter := request_adapter_sync(instance, &adapter_options)
 	defer wgpu.AdapterRelease(adapter)
 
 	// The device is the handle to the GPU API
@@ -83,20 +102,10 @@ app_init :: proc(app: ^Application) {
 
 	wgpu.QueueSubmit(app.queue, {command})
 	wgpu.CommandBufferRelease(command)
-
-	// Init GLFW
-	if !glfw.Init() {
-		panic("Failed to initialize GLFW")
-	}
-	glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
-	glfw.WindowHint(glfw.RESIZABLE, false)
-	app.window = glfw.CreateWindow(640, 480, "Learn WGPU", nil, nil)
-	if app.window == nil {
-		panic("Failed to create window")
-	}
 }
 
 app_terminate :: proc(app: Application) {
+	wgpu.SurfaceRelease(app.surface)
 	glfw.DestroyWindow(app.window)
 	glfw.Terminate()
 	wgpu.QueueRelease(app.queue)
