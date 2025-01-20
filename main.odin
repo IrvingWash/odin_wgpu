@@ -48,6 +48,25 @@ main :: proc() {
 	// The queue should be gotten only once
 	queue := wgpu.DeviceGetQueue(device)
 	defer wgpu.QueueRelease(queue)
+
+	// Command Encoder encodes the commands that should be passed to the queue
+	// Should be recreated every time
+	encoder_descriptor := wgpu.CommandEncoderDescriptor {
+		label = "My command encoder",
+	}
+	encoder := wgpu.DeviceCreateCommandEncoder(device, &encoder_descriptor)
+	wgpu.CommandEncoderInsertDebugMarker(encoder, "Do one thing")
+	wgpu.CommandEncoderInsertDebugMarker(encoder, "Do another thing")
+
+	// Command buffer is the result of all the commands passed into the encoder
+	command_buffer_descriptor := wgpu.CommandBufferDescriptor {
+		label = "My command buffer",
+	}
+	command := wgpu.CommandEncoderFinish(encoder, &command_buffer_descriptor)
+	wgpu.CommandEncoderRelease(encoder)
+
+	wgpu.QueueSubmit(queue, {command})
+	wgpu.CommandBufferRelease(command)
 }
 
 request_adapter_sync :: proc(
