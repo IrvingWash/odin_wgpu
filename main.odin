@@ -2,11 +2,29 @@ package main
 
 import "base:runtime"
 import "core:fmt"
+import "vendor:glfw"
 import "vendor:wgpu"
+
+main :: proc() {
+	app := Application{}
+
+	app_init(&app)
+	defer app_terminate(app)
+
+	for app_is_running(app) {
+		app_main_loop(&app)
+	}
+}
 
 ctx: runtime.Context
 
-main :: proc() {
+Application :: struct {
+	window: glfw.WindowHandle,
+	device: wgpu.Device,
+	queue:  wgpu.Queue,
+}
+
+app_init :: proc(app: ^Application) {
 	// Get an instance to begin working with WGPU
 	instance_descriptor := wgpu.InstanceDescriptor{}
 	instance := wgpu.CreateInstance(&instance_descriptor)
@@ -41,20 +59,18 @@ main :: proc() {
 			},
 		},
 	}
-	device := request_device_sync(adapter, &device_descriptor)
-	defer wgpu.DeviceRelease(device)
+	app.device = request_device_sync(adapter, &device_descriptor)
 
 	// Command Queue is a queue through which the CPU sends commands to the GPU
 	// The queue should be gotten only once
-	queue := wgpu.DeviceGetQueue(device)
-	defer wgpu.QueueRelease(queue)
+	app.queue = wgpu.DeviceGetQueue(app.device)
 
 	// Command Encoder encodes the commands that should be passed to the queue
 	// Should be recreated every time
 	encoder_descriptor := wgpu.CommandEncoderDescriptor {
 		label = "My command encoder",
 	}
-	encoder := wgpu.DeviceCreateCommandEncoder(device, &encoder_descriptor)
+	encoder := wgpu.DeviceCreateCommandEncoder(app.device, &encoder_descriptor)
 	wgpu.CommandEncoderInsertDebugMarker(encoder, "Do one thing")
 	wgpu.CommandEncoderInsertDebugMarker(encoder, "Do another thing")
 
@@ -65,8 +81,34 @@ main :: proc() {
 	command := wgpu.CommandEncoderFinish(encoder, &command_buffer_descriptor)
 	wgpu.CommandEncoderRelease(encoder)
 
-	wgpu.QueueSubmit(queue, {command})
+	wgpu.QueueSubmit(app.queue, {command})
 	wgpu.CommandBufferRelease(command)
+
+	// Init GLFW
+	if !glfw.Init() {
+		panic("Failed to initialize GLFW")
+	}
+	glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
+	glfw.WindowHint(glfw.RESIZABLE, false)
+	app.window = glfw.CreateWindow(640, 480, "Learn WGPU", nil, nil)
+	if app.window == nil {
+		panic("Failed to create window")
+	}
+}
+
+app_terminate :: proc(app: Application) {
+	glfw.DestroyWindow(app.window)
+	glfw.Terminate()
+	wgpu.QueueRelease(app.queue)
+	wgpu.DeviceRelease(app.device)
+}
+
+app_main_loop :: proc(app: ^Application) {
+	glfw.PollEvents()
+}
+
+app_is_running :: proc(app: Application) -> bool {
+	return !glfw.WindowShouldClose(app.window)
 }
 
 request_adapter_sync :: proc(
