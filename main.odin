@@ -10,11 +10,12 @@ main :: proc() {
 	app := Application{}
 
 	app_init(&app)
-	defer app_terminate(app)
 
 	for app_is_running(app) {
 		app_main_loop(&app)
 	}
+
+	app_terminate(app)
 }
 
 ctx: runtime.Context
@@ -83,9 +84,23 @@ app_init :: proc(app: ^Application) {
 	// Command Queue is a queue through which the CPU sends commands to the GPU
 	// The queue should be gotten only once
 	app.queue = wgpu.DeviceGetQueue(app.device)
+
+	// Configure the surface to draw onto
+	surface_capabilities := wgpu.SurfaceGetCapabilities(app.surface, adapter)
+	surface_config := wgpu.SurfaceConfiguration {
+		width       = 640, // Same as window width for GLFW
+		height      = 480, // Same as window height for GLFW
+		format      = surface_capabilities.formats[0],
+		usage       = wgpu.TextureUsageFlags{.RenderAttachment}, // The surface/texture will be used for rendering
+		device      = app.device,
+		presentMode = .Fifo,
+		alphaMode   = .Auto,
+	}
+	wgpu.SurfaceConfigure(app.surface, &surface_config)
 }
 
 app_terminate :: proc(app: Application) {
+	wgpu.SurfaceUnconfigure(app.surface)
 	wgpu.SurfaceRelease(app.surface)
 	glfw.DestroyWindow(app.window)
 	glfw.Terminate()
@@ -95,10 +110,68 @@ app_terminate :: proc(app: Application) {
 
 app_main_loop :: proc(app: ^Application) {
 	glfw.PollEvents()
+
+	// Get the next view in the swap chain to draw on
+	texture_view, texture_view_ok := get_next_texture_view(app^).?
+	if !texture_view_ok {
+		return
+	}
+
+	encoder_descriptor := wgpu.CommandEncoderDescriptor {
+		label = "My command encoder",
+	}
+	encoder := wgpu.DeviceCreateCommandEncoder(app.device, &encoder_descriptor)
+
+	render_pass_descriptor := wgpu.RenderPassDescriptor {
+		colorAttachmentCount = 1,
+		colorAttachments     = &wgpu.RenderPassColorAttachment {
+			view = texture_view,
+			loadOp = .Clear,
+			storeOp = .Store,
+			clearValue = wgpu.Color{0.9, 0.1, 0.2, 1.0},
+			depthSlice = 0,
+		},
+	}
+	render_pass_encoder := wgpu.CommandEncoderBeginRenderPass(encoder, &render_pass_descriptor)
+	wgpu.RenderPassEncoderEnd(render_pass_encoder)
+	wgpu.RenderPassEncoderRelease(render_pass_encoder)
+
+	cmd_buffer_descriptor := wgpu.CommandBufferDescriptor {
+		label = "My command buffer",
+	}
+	cmd_buffer := wgpu.CommandEncoderFinish(encoder, &cmd_buffer_descriptor)
+	wgpu.CommandEncoderRelease(encoder)
+
+	wgpu.QueueSubmit(app.queue, {cmd_buffer})
+	wgpu.CommandBufferRelease(cmd_buffer)
+
+	wgpu.TextureViewRelease(texture_view)
+
+	wgpu.SurfacePresent(app.surface)
 }
 
 app_is_running :: proc(app: Application) -> bool {
 	return !glfw.WindowShouldClose(app.window)
+}
+
+get_next_texture_view :: proc(app: Application) -> Maybe(wgpu.TextureView) {
+	surface_texture := wgpu.SurfaceGetCurrentTexture(app.surface)
+	if surface_texture.status != .Success {
+		return nil
+	}
+
+	texture_view_descriptor := wgpu.TextureViewDescriptor {
+		label           = "My surface texture view",
+		format          = wgpu.TextureGetFormat(surface_texture.texture),
+		dimension       = ._2D,
+		mipLevelCount   = 1,
+		arrayLayerCount = 1,
+		aspect          = .All,
+	}
+
+	texture_view := wgpu.TextureCreateView(surface_texture.texture, &texture_view_descriptor)
+
+	return texture_view
 }
 
 request_adapter_sync :: proc(
