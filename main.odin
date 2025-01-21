@@ -83,25 +83,6 @@ app_init :: proc(app: ^Application) {
 	// Command Queue is a queue through which the CPU sends commands to the GPU
 	// The queue should be gotten only once
 	app.queue = wgpu.DeviceGetQueue(app.device)
-
-	// Command Encoder encodes the commands that should be passed to the queue
-	// Should be recreated every time
-	encoder_descriptor := wgpu.CommandEncoderDescriptor {
-		label = "My command encoder",
-	}
-	encoder := wgpu.DeviceCreateCommandEncoder(app.device, &encoder_descriptor)
-	wgpu.CommandEncoderInsertDebugMarker(encoder, "Do one thing")
-	wgpu.CommandEncoderInsertDebugMarker(encoder, "Do another thing")
-
-	// Command buffer is the result of all the commands passed into the encoder
-	command_buffer_descriptor := wgpu.CommandBufferDescriptor {
-		label = "My command buffer",
-	}
-	command := wgpu.CommandEncoderFinish(encoder, &command_buffer_descriptor)
-	wgpu.CommandEncoderRelease(encoder)
-
-	wgpu.QueueSubmit(app.queue, {command})
-	wgpu.CommandBufferRelease(command)
 }
 
 app_terminate :: proc(app: Application) {
