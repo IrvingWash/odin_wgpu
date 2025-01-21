@@ -2,6 +2,8 @@ package main
 
 import "base:runtime"
 import "core:fmt"
+import "core:os"
+import "core:strings"
 import "vendor:glfw"
 import "vendor:wgpu"
 import "vendor:wgpu/glfwglue"
@@ -21,10 +23,12 @@ main :: proc() {
 ctx: runtime.Context
 
 Application :: struct {
-	window:  glfw.WindowHandle,
-	device:  wgpu.Device,
-	queue:   wgpu.Queue,
-	surface: wgpu.Surface,
+	window:          glfw.WindowHandle,
+	device:          wgpu.Device,
+	queue:           wgpu.Queue,
+	surface:         wgpu.Surface,
+	surface_format:  wgpu.TextureFormat,
+	render_pipeline: wgpu.RenderPipeline,
 }
 
 app_init :: proc(app: ^Application) {
@@ -87,19 +91,24 @@ app_init :: proc(app: ^Application) {
 
 	// Configure the surface to draw onto
 	surface_capabilities := wgpu.SurfaceGetCapabilities(app.surface, adapter)
+	app.surface_format = surface_capabilities.formats[0]
 	surface_config := wgpu.SurfaceConfiguration {
 		width       = 640, // Same as window width for GLFW
 		height      = 480, // Same as window height for GLFW
-		format      = surface_capabilities.formats[0],
+		format      = app.surface_format,
 		usage       = wgpu.TextureUsageFlags{.RenderAttachment}, // The surface/texture will be used for rendering
 		device      = app.device,
 		presentMode = .Fifo,
 		alphaMode   = .Auto,
 	}
 	wgpu.SurfaceConfigure(app.surface, &surface_config)
+
+	// Initialize the render pipeline
+	initialize_render_pipeline(app)
 }
 
 app_terminate :: proc(app: Application) {
+	wgpu.RenderPipelineRelease(app.render_pipeline)
 	wgpu.SurfaceUnconfigure(app.surface)
 	wgpu.SurfaceRelease(app.surface)
 	glfw.DestroyWindow(app.window)
@@ -133,6 +142,14 @@ app_main_loop :: proc(app: ^Application) {
 		},
 	}
 	render_pass_encoder := wgpu.CommandEncoderBeginRenderPass(encoder, &render_pass_descriptor)
+	wgpu.RenderPassEncoderSetPipeline(render_pass_encoder, app.render_pipeline)
+	wgpu.RenderPassEncoderDraw(
+		render_pass_encoder,
+		vertexCount = 3,
+		instanceCount = 1,
+		firstVertex = 0,
+		firstInstance = 0,
+	)
 	wgpu.RenderPassEncoderEnd(render_pass_encoder)
 	wgpu.RenderPassEncoderRelease(render_pass_encoder)
 
@@ -152,6 +169,74 @@ app_main_loop :: proc(app: ^Application) {
 
 app_is_running :: proc(app: Application) -> bool {
 	return !glfw.WindowShouldClose(app.window)
+}
+
+initialize_render_pipeline :: proc(app: ^Application) {
+	shader_code := load_shader_code()
+	// defer delete(shader_code)
+	raw_shader_code := strings.clone_to_cstring(shader_code)
+	// defer delete(raw_shader_code)
+	shader_module_descriptor := wgpu.ShaderModuleDescriptor {
+		label       = "My shader module",
+		nextInChain = &wgpu.ShaderModuleWGSLDescriptor {
+			sType = .ShaderModuleWGSLDescriptor,
+			code = raw_shader_code,
+		},
+	}
+	shader_module := wgpu.DeviceCreateShaderModule(app.device, &shader_module_descriptor)
+	defer wgpu.ShaderModuleRelease(shader_module)
+
+	render_pipeline_descriptor := wgpu.RenderPipelineDescriptor {
+		vertex = wgpu.VertexState {
+			buffers    = nil, // Nothing, as we hardcode the positions of the vertices in the vertex shader
+			module     = shader_module,
+			entryPoint = "vs_main",
+		},
+		primitive = wgpu.PrimitiveState {
+			// Each sequence of 3 vertices will be considered as a triangle
+			topology         = .TriangleList,
+			// How to connect vertices, `Undefined` == sequential connection
+			stripIndexFormat = .Undefined,
+			// A "face" of the triangle is the side where the vertices are connected Counter ClockWise
+			frontFace        = .CCW,
+			// Cull (hide) faces pointing to the opposite direction.
+			cullMode         = .Front,
+		},
+		fragment = &wgpu.FragmentState {
+			module      = shader_module,
+			entryPoint  = "fs_main",
+			// We have one target because our render pass has only one color attachement
+			targetCount = 1,
+			targets     = &wgpu.ColorTargetState {
+				format = app.surface_format,
+				blend = &wgpu.BlendState {
+					color = wgpu.BlendComponent {
+						srcFactor = .SrcAlpha,
+						dstFactor = .OneMinusSrcAlpha,
+						operation = .Add,
+					},
+					alpha = wgpu.BlendComponent {
+						srcFactor = .Zero,
+						dstFactor = .One,
+						operation = .Add,
+					},
+				},
+				writeMask = wgpu.ColorWriteMaskFlags{.Red, .Green, .Blue, .Alpha},
+			},
+		},
+		// Another optimization config. Hides overlapping pixels based on the depth.
+		// Not using for now
+		depthStencil = nil,
+		multisample = wgpu.MultisampleState {
+			// Samples per pixel
+			count = 1,
+		},
+		// Memory layout for input/output resources. We don't need any for now
+		layout = nil,
+	}
+
+	// Configures the render pipeline. The pipeline itself is baked into the GPU, we can configure it.
+	app.render_pipeline = wgpu.DeviceCreateRenderPipeline(app.device, &render_pipeline_descriptor)
 }
 
 get_next_texture_view :: proc(app: Application) -> Maybe(wgpu.TextureView) {
@@ -246,5 +331,17 @@ request_device_sync :: proc(
 	wgpu.AdapterRequestDevice(adapter, descriptor, on_device_request_ended, &user_data)
 
 	return user_data.device
+}
+
+load_shader_code :: proc() -> string {
+	path := "shader.wgsl"
+
+	bytes, ok := os.read_entire_file(path)
+	if !ok {
+		fmt.panicf("Failed to read file: %s", path)
+	}
+	defer delete(bytes)
+
+	return strings.clone_from_bytes(bytes)
 }
 
