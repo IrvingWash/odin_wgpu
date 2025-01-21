@@ -235,7 +235,6 @@ initialize_render_pipeline :: proc(app: ^Application) {
 		layout = nil,
 	}
 
-	// Configures the render pipeline. The pipeline itself is baked into the GPU, we can configure it.
 	app.render_pipeline = wgpu.DeviceCreateRenderPipeline(app.device, &render_pipeline_descriptor)
 }
 
