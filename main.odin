@@ -176,7 +176,7 @@ app_main_loop :: proc(app: ^Application) {
 			view = texture_view,
 			loadOp = .Clear,
 			storeOp = .Store,
-			clearValue = wgpu.Color{0.9, 0.1, 0.2, 1.0},
+			clearValue = wgpu.Color{0.05, 0.05, 0.05, 1},
 			depthSlice = 0,
 		},
 	}
@@ -220,25 +220,19 @@ init_buffers :: proc(app: ^Application) {
 	// Coordinates of vertices
 	// odinfmt: disable
 	vertex_data := [?]f32 {
-		// Left triangle
-		-0.5, -0.5,
-		+0.5, -0.5,
-		+0.0, +0.5,
-
-		// Center triangle
-		-0.55, -0.5,
-		-0.05, +0.5,
-		-0.55, +0.5,
-
-		// Right triangle
-		+0.05, +0.5,
-		+0.55, -0.5,
-		+0.55, +0.5,
+		// x0,  y0,  r0,  g0,  b0
+		-0.5, -0.5, 1.0, 0.0, 0.0,
+		+0.5, -0.5, 0.0, 1.0, 0.0,
+		+0.0,  +0.5, 0.0, 0.0, 1.0,
+		-0.55, -0.5, 1.0, 1.0, 0.0,
+		-0.05, +0.5, 1.0, 0.0, 1.0,
+		-0.55, +0.5, 0.0, 1.0, 1.0
 	}
 	// odinfmt: enable
 
 
-	app.vertex_count = len(vertex_data) / 2
+	// get the number of vertices by deleting by the count of components
+	app.vertex_count = len(vertex_data) / 5
 
 	// Create the buffer and assign the vertex data into it
 	buffer_descriptor := wgpu.BufferDescriptor {
@@ -275,17 +269,26 @@ initialize_render_pipeline :: proc(app: ^Application) {
 	shader_module := wgpu.DeviceCreateShaderModule(app.device, &shader_module_descriptor)
 	defer wgpu.ShaderModuleRelease(shader_module)
 
+	vertex_attributes := [2]wgpu.VertexAttribute {
+		wgpu.VertexAttribute {
+			shaderLocation = 0, // @location(0)
+			format         = .Float32x2, // We have x, y coordinates, both are f32
+			offset         = 0, // Only positions in the array, so no need for offset
+		},
+		wgpu.VertexAttribute {
+			shaderLocation = 1, // @location(1)
+			format         = .Float32x3, // We have rgb, all are f32
+			offset         = 2 * size_of(f32), // skip xy
+		},
+	}
+
 	render_pipeline_descriptor := wgpu.RenderPipelineDescriptor {
 		vertex = wgpu.VertexState {
 			bufferCount = 1, // We have only one buffer
 			buffers     = &wgpu.VertexBufferLayout {
-				attributeCount = 1, // We pass only position data -- one attribute
-				attributes     = &wgpu.VertexAttribute {
-					shaderLocation = 0, // @location(0)
-					format         = .Float32x2, // We have x, y coordinates, both are f32
-					offset         = 0, // Only positions in the array, so no need for offset
-				},
-				arrayStride    = 2 * size_of(f32), // each vertex contains two values
+				attributeCount = len(vertex_attributes), // We pass position and color data, 2
+				attributes     = raw_data(&vertex_attributes),
+				arrayStride    = 5 * size_of(f32), // each vertex contains 5 values
 				stepMode       = .Vertex, // Values correspond to different vertices
 			},
 			module      = shader_module,
