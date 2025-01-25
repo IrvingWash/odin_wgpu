@@ -267,7 +267,6 @@ init_buffers :: proc(app: ^Application) {
 	// Create the index buffer
 	buffer_descriptor.size = len(index_data) * size_of(u16)
 	rounder: u16 : 3
-	buffer_descriptor.size = u64((u16(buffer_descriptor.size + 3)) & ~rounder)
 	buffer_descriptor.usage = {.CopyDst, .Index}
 	app.index_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
 
