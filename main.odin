@@ -62,8 +62,9 @@ Application :: struct {
 	surface:         wgpu.Surface,
 	surface_format:  wgpu.TextureFormat,
 	render_pipeline: wgpu.RenderPipeline,
-	vertex_buffer:   wgpu.Buffer, // Buffer containing vertex data
-	vertex_count:    u32, // Count of vertices to use in the draw call
+	point_buffer:    wgpu.Buffer, // Buffer containing vertex data
+	index_buffer:    wgpu.Buffer,
+	index_count:     u32, // Count of vertices to use in the draw call
 }
 
 app_init :: proc(app: ^Application) {
@@ -146,7 +147,8 @@ app_init :: proc(app: ^Application) {
 }
 
 app_terminate :: proc(app: Application) {
-	wgpu.BufferRelease(app.vertex_buffer)
+	wgpu.BufferRelease(app.point_buffer)
+	wgpu.BufferRelease(app.index_buffer)
 	wgpu.RenderPipelineRelease(app.render_pipeline)
 	wgpu.SurfaceUnconfigure(app.surface)
 	wgpu.SurfaceRelease(app.surface)
@@ -183,20 +185,30 @@ app_main_loop :: proc(app: ^Application) {
 	render_pass_encoder := wgpu.CommandEncoderBeginRenderPass(encoder, &render_pass_descriptor)
 	wgpu.RenderPassEncoderSetPipeline(render_pass_encoder, app.render_pipeline)
 
-	// Set vertex buffer to draw it
+	// Set point buffer to draw it
 	wgpu.RenderPassEncoderSetVertexBuffer(
 		render_pass_encoder,
 		slot = 0,
-		buffer = app.vertex_buffer,
+		buffer = app.point_buffer,
 		offset = 0,
-		size = wgpu.BufferGetSize(app.vertex_buffer),
+		size = wgpu.BufferGetSize(app.point_buffer),
 	)
 
-	wgpu.RenderPassEncoderDraw(
+	// Set index buffer
+	wgpu.RenderPassEncoderSetIndexBuffer(
 		render_pass_encoder,
-		app.vertex_count,
+		app.index_buffer,
+		.Uint16,
+		0,
+		wgpu.BufferGetSize(app.index_buffer),
+	)
+
+	wgpu.RenderPassEncoderDrawIndexed(
+		render_pass_encoder,
+		app.index_count,
 		instanceCount = 1,
-		firstVertex = 0,
+		firstIndex = 0,
+		baseVertex = 0,
 		firstInstance = 0,
 	)
 	wgpu.RenderPassEncoderEnd(render_pass_encoder)
@@ -217,36 +229,54 @@ app_main_loop :: proc(app: ^Application) {
 }
 
 init_buffers :: proc(app: ^Application) {
-	// Coordinates of vertices
+	// Coordinates of rectangle points
 	// odinfmt: disable
-	vertex_data := [?]f32 {
-		// x0,  y0,  r0,  g0,  b0
-		-0.5, -0.5, 1.0, 0.0, 0.0,
-		+0.5, -0.5, 0.0, 1.0, 0.0,
-		+0.0,  +0.5, 0.0, 0.0, 1.0,
-		-0.55, -0.5, 1.0, 1.0, 0.0,
-		-0.05, +0.5, 1.0, 0.0, 1.0,
-		-0.55, +0.5, 0.0, 1.0, 1.0
+	point_data := [20]f32 {
+		// x,   y,     r,   g,   b
+		-0.5, -0.5,   1.0, 0.0, 0.0,
+		+0.5, -0.5,   0.0, 1.0, 0.0,
+		+0.5, +0.5,   0.0, 0.0, 1.0,
+		-0.5, +0.5,   1.0, 1.0, 0.0
+	}
+
+	index_data := [6]u16 {
+		0, 1, 2, // Triangle #0 connects points #0, #1 and #2
+		0, 2, 3  // Triangle #1 connects points #0, #2 and #3
 	}
 	// odinfmt: enable
 
 
-	// get the number of vertices by deleting by the count of components
-	app.vertex_count = len(vertex_data) / 5
+	// get the number of indexes
+	app.index_count = len(index_data)
 
-	// Create the buffer and assign the vertex data into it
+	// Create the point buffer and assign the data into it
 	buffer_descriptor := wgpu.BufferDescriptor {
-		size  = len(vertex_data) * size_of(f32),
+		size  = len(point_data) * size_of(f32),
 		usage = {.CopyDst, .Vertex},
 	}
-	app.vertex_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
+	app.point_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
 
 	wgpu.QueueWriteBuffer(
 		app.queue,
-		app.vertex_buffer,
+		app.point_buffer,
 		bufferOffset = 0,
-		data = &vertex_data,
+		data = &point_data,
 		size = auto_cast buffer_descriptor.size,
+	)
+
+	// Create the index buffer
+	buffer_descriptor.size = len(index_data) * size_of(u16)
+	rounder: u16 : 3
+	buffer_descriptor.size = u64((u16(buffer_descriptor.size + 3)) & ~rounder)
+	buffer_descriptor.usage = {.CopyDst, .Index}
+	app.index_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
+
+	wgpu.QueueWriteBuffer(
+		app.queue,
+		app.index_buffer,
+		0,
+		&index_data,
+		auto_cast buffer_descriptor.size,
 	)
 }
 
