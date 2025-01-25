@@ -24,6 +24,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     // Fix color space (gamma correction)
+    // 2.2 is just an approximation
     let linear_color = pow(in.color, vec3f(2.2));
 
     return vec4f(linear_color, 1.0);
