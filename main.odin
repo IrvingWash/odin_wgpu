@@ -62,6 +62,8 @@ Application :: struct {
 	surface:         wgpu.Surface,
 	surface_format:  wgpu.TextureFormat,
 	render_pipeline: wgpu.RenderPipeline,
+	vertex_buffer:   wgpu.Buffer, // Buffer containing vertex data
+	vertex_count:    u32, // Count of vertices to use in the draw call
 }
 
 app_init :: proc(app: ^Application) {
@@ -138,9 +140,13 @@ app_init :: proc(app: ^Application) {
 
 	// Initialize the render pipeline
 	initialize_render_pipeline(app)
+
+	// Pass vertex data to GPU
+	init_buffers(app)
 }
 
 app_terminate :: proc(app: Application) {
+	wgpu.BufferRelease(app.vertex_buffer)
 	wgpu.RenderPipelineRelease(app.render_pipeline)
 	wgpu.SurfaceUnconfigure(app.surface)
 	wgpu.SurfaceRelease(app.surface)
@@ -176,9 +182,19 @@ app_main_loop :: proc(app: ^Application) {
 	}
 	render_pass_encoder := wgpu.CommandEncoderBeginRenderPass(encoder, &render_pass_descriptor)
 	wgpu.RenderPassEncoderSetPipeline(render_pass_encoder, app.render_pipeline)
+
+	// Set vertex buffer to draw it
+	wgpu.RenderPassEncoderSetVertexBuffer(
+		render_pass_encoder,
+		slot = 0,
+		buffer = app.vertex_buffer,
+		offset = 0,
+		size = wgpu.BufferGetSize(app.vertex_buffer),
+	)
+
 	wgpu.RenderPassEncoderDraw(
 		render_pass_encoder,
-		vertexCount = 3,
+		app.vertex_count,
 		instanceCount = 1,
 		firstVertex = 0,
 		firstInstance = 0,
@@ -198,6 +214,46 @@ app_main_loop :: proc(app: ^Application) {
 	wgpu.TextureViewRelease(texture_view)
 
 	wgpu.SurfacePresent(app.surface)
+}
+
+init_buffers :: proc(app: ^Application) {
+	// Coordinates of vertices
+	// odinfmt: disable
+	vertex_data := [?]f32 {
+		// Left triangle
+		-0.5, -0.5,
+		+0.5, -0.5,
+		+0.0, +0.5,
+
+		// Center triangle
+		-0.55, -0.5,
+		-0.05, +0.5,
+		-0.55, +0.5,
+
+		// Right triangle
+		+0.05, +0.5,
+		+0.55, -0.5,
+		+0.55, +0.5,
+	}
+	// odinfmt: enable
+
+
+	app.vertex_count = len(vertex_data) / 2
+
+	// Create the buffer and assign the vertex data into it
+	buffer_descriptor := wgpu.BufferDescriptor {
+		size  = len(vertex_data) * size_of(f32),
+		usage = {.CopyDst, .Vertex},
+	}
+	app.vertex_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
+
+	wgpu.QueueWriteBuffer(
+		app.queue,
+		app.vertex_buffer,
+		bufferOffset = 0,
+		data = &vertex_data,
+		size = auto_cast buffer_descriptor.size,
+	)
 }
 
 app_is_running :: proc(app: Application) -> bool {
@@ -221,9 +277,19 @@ initialize_render_pipeline :: proc(app: ^Application) {
 
 	render_pipeline_descriptor := wgpu.RenderPipelineDescriptor {
 		vertex = wgpu.VertexState {
-			buffers    = nil, // Nothing, as we hardcode the positions of the vertices in the vertex shader
-			module     = shader_module,
-			entryPoint = "vs_main",
+			bufferCount = 1, // We have only one buffer
+			buffers     = &wgpu.VertexBufferLayout {
+				attributeCount = 1, // We pass only position data -- one attribute
+				attributes     = &wgpu.VertexAttribute {
+					shaderLocation = 0, // @location(0)
+					format         = .Float32x2, // We have x, y coordinates, both are f32
+					offset         = 0, // Only positions in the array, so no need for offset
+				},
+				arrayStride    = 2 * size_of(f32), // each vertex contains two values
+				stepMode       = .Vertex, // Values correspond to different vertices
+			},
+			module      = shader_module,
+			entryPoint  = "vs_main",
 		},
 		primitive = wgpu.PrimitiveState {
 			// Each sequence of 3 vertices will be considered as a triangle
@@ -233,7 +299,7 @@ initialize_render_pipeline :: proc(app: ^Application) {
 			// A "face" of the triangle is the side where the vertices are connected Counter ClockWise
 			frontFace        = .CCW,
 			// Cull (hide) faces pointing to the opposite direction.
-			cullMode         = .Front,
+			cullMode         = .Back,
 		},
 		fragment = &wgpu.FragmentState {
 			module      = shader_module,
@@ -376,4 +442,3 @@ load_shader_code :: proc() -> string {
 
 	return strings.clone_from_bytes(bytes)
 }
-
