@@ -11,10 +11,11 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     let ratio = 640.0 / 480.0;
+    let offset = vec2f(-0.6875, -0.463); // The offset that we want to apply to the position
 
     var out: VertexOutput;
 
-    out.position = vec4f(in.position.x, in.position.y * ratio, 0.0, 1.0);
+    out.position = vec4f(in.position.x + offset.x, (in.position.y + offset.y) * ratio, 0.0, 1.0);
     out.color = in.color;
 
     return out;

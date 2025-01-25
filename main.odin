@@ -229,29 +229,12 @@ app_main_loop :: proc(app: ^Application) {
 }
 
 init_buffers :: proc(app: ^Application) {
-	// Coordinates of rectangle points
-	// odinfmt: disable
-	point_data := [20]f32 {
-		// x,   y,     r,   g,   b
-		-0.5, -0.5,   1.0, 0.0, 0.0,
-		+0.5, -0.5,   0.0, 1.0, 0.0,
-		+0.5, +0.5,   0.0, 0.0, 1.0,
-		-0.5, +0.5,   1.0, 1.0, 0.0
-	}
-
-	index_data := [6]u16 {
-		0, 1, 2, // Triangle #0 connects points #0, #1 and #2
-		0, 2, 3  // Triangle #1 connects points #0, #2 and #3
-	}
-	// odinfmt: enable
-
-
 	// get the number of indexes
-	app.index_count = len(index_data)
+	app.index_count = len(INDICES)
 
 	// Create the point buffer and assign the data into it
 	buffer_descriptor := wgpu.BufferDescriptor {
-		size  = len(point_data) * size_of(f32),
+		size  = len(POINTS) * size_of(f32),
 		usage = {.CopyDst, .Vertex},
 	}
 	app.point_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
@@ -260,13 +243,14 @@ init_buffers :: proc(app: ^Application) {
 		app.queue,
 		app.point_buffer,
 		bufferOffset = 0,
-		data = &point_data,
+		data = &POINTS,
 		size = auto_cast buffer_descriptor.size,
 	)
 
 	// Create the index buffer
-	buffer_descriptor.size = len(index_data) * size_of(u16)
+	buffer_descriptor.size = len(INDICES) * size_of(u16)
 	rounder: u16 : 3
+	buffer_descriptor.size = u64(u16(buffer_descriptor.size + 3) & ~rounder)
 	buffer_descriptor.usage = {.CopyDst, .Index}
 	app.index_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
 
@@ -274,7 +258,7 @@ init_buffers :: proc(app: ^Application) {
 		app.queue,
 		app.index_buffer,
 		0,
-		&index_data,
+		&INDICES,
 		auto_cast buffer_descriptor.size,
 	)
 }
