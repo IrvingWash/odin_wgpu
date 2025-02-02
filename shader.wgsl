@@ -1,3 +1,5 @@
+@group(0) @binding(0) var<uniform> uTime: f32;
+
 struct VertexInput {
     @location(0) position: vec2f,
     @location(1) color: vec3f,
@@ -11,7 +13,8 @@ struct VertexOutput {
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     let ratio = 640.0 / 480.0;
-    let offset = vec2f(-0.6875, -0.463); // The offset that we want to apply to the position
+    var offset = vec2f(-0.6875, -0.463); // The offset that we want to apply to the position
+    offset += 0.3 * vec2f(cos(uTime), sin(uTime)); // Move the triangles around a circle
 
     var out: VertexOutput;
 

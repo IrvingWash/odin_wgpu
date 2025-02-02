@@ -56,15 +56,19 @@ main :: proc() {
 ctx: runtime.Context
 
 Application :: struct {
-	window:          glfw.WindowHandle,
-	device:          wgpu.Device,
-	queue:           wgpu.Queue,
-	surface:         wgpu.Surface,
-	surface_format:  wgpu.TextureFormat,
-	render_pipeline: wgpu.RenderPipeline,
-	point_buffer:    wgpu.Buffer, // Buffer containing vertex data
-	index_buffer:    wgpu.Buffer,
-	index_count:     u32, // Count of vertices to use in the draw call
+	window:            glfw.WindowHandle,
+	device:            wgpu.Device,
+	queue:             wgpu.Queue,
+	surface:           wgpu.Surface,
+	surface_format:    wgpu.TextureFormat,
+	render_pipeline:   wgpu.RenderPipeline,
+	point_buffer:      wgpu.Buffer, // Buffer containing vertex data
+	uniform_buffer:    wgpu.Buffer,
+	index_buffer:      wgpu.Buffer,
+	bind_group_layout: wgpu.BindGroupLayout,
+	bind_group:        wgpu.BindGroup,
+	pipeline_layout:   wgpu.PipelineLayout,
+	index_count:       u32, // Count of vertices to use in the draw call
 }
 
 app_init :: proc(app: ^Application) {
@@ -144,9 +148,15 @@ app_init :: proc(app: ^Application) {
 
 	// Pass vertex data to GPU
 	init_buffers(app)
+
+	init_bind_groups(app)
 }
 
 app_terminate :: proc(app: Application) {
+	wgpu.BindGroupRelease(app.bind_group)
+	wgpu.PipelineLayoutRelease(app.pipeline_layout)
+	wgpu.BindGroupLayoutRelease(app.bind_group_layout)
+	wgpu.BufferRelease(app.uniform_buffer)
 	wgpu.BufferRelease(app.point_buffer)
 	wgpu.BufferRelease(app.index_buffer)
 	wgpu.RenderPipelineRelease(app.render_pipeline)
@@ -160,6 +170,9 @@ app_terminate :: proc(app: Application) {
 
 app_main_loop :: proc(app: ^Application) {
 	glfw.PollEvents()
+
+	t := f32(glfw.GetTime())
+	wgpu.QueueWriteBuffer(app.queue, app.uniform_buffer, 0, &t, size_of(f32))
 
 	// Get the next view in the swap chain to draw on
 	texture_view, texture_view_ok := get_next_texture_view(app^).?
@@ -203,6 +216,8 @@ app_main_loop :: proc(app: ^Application) {
 		wgpu.BufferGetSize(app.index_buffer),
 	)
 
+	wgpu.RenderPassEncoderSetBindGroup(render_pass_encoder, 0, app.bind_group)
+
 	wgpu.RenderPassEncoderDrawIndexed(
 		render_pass_encoder,
 		app.index_count,
@@ -226,6 +241,24 @@ app_main_loop :: proc(app: ^Application) {
 	wgpu.TextureViewRelease(texture_view)
 
 	wgpu.SurfacePresent(app.surface)
+}
+
+init_bind_groups :: proc(app: ^Application) {
+	binding := wgpu.BindGroupEntry {
+		binding = 0,
+		buffer  = app.uniform_buffer,
+		offset  = 0,
+		size    = 4 * size_of(f32),
+	}
+
+	app.bind_group = wgpu.DeviceCreateBindGroup(
+		app.device,
+		&wgpu.BindGroupDescriptor {
+			layout = app.bind_group_layout,
+			entryCount = 1,
+			entries = &binding,
+		},
+	)
 }
 
 init_buffers :: proc(app: ^Application) {
@@ -261,6 +294,14 @@ init_buffers :: proc(app: ^Application) {
 		&INDICES,
 		auto_cast buffer_descriptor.size,
 	)
+
+	// Create uniform buffer
+	buffer_descriptor.size = 4 * size_of(f32)
+	buffer_descriptor.usage = {.CopyDst, .Uniform}
+	app.uniform_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
+
+	current_time := 1
+	wgpu.QueueWriteBuffer(app.queue, app.uniform_buffer, 0, &current_time, size_of(f32))
 }
 
 app_is_running :: proc(app: Application) -> bool {
@@ -294,6 +335,29 @@ initialize_render_pipeline :: proc(app: ^Application) {
 			offset         = 2 * size_of(f32), // skip xy
 		},
 	}
+
+	app.bind_group_layout = wgpu.DeviceCreateBindGroupLayout(
+		app.device,
+		&wgpu.BindGroupLayoutDescriptor {
+			entryCount = 1,
+			entries = &wgpu.BindGroupLayoutEntry {
+				visibility = {.Vertex},
+				binding = 0,
+				buffer = wgpu.BufferBindingLayout {
+					type = .Uniform,
+					minBindingSize = 4 * size_of(f32),
+				},
+			},
+		},
+	)
+
+	app.pipeline_layout = wgpu.DeviceCreatePipelineLayout(
+		app.device,
+		&wgpu.PipelineLayoutDescriptor {
+			bindGroupLayoutCount = 1,
+			bindGroupLayouts = &app.bind_group_layout,
+		},
+	)
 
 	render_pipeline_descriptor := wgpu.RenderPipelineDescriptor {
 		vertex = wgpu.VertexState {
@@ -347,7 +411,7 @@ initialize_render_pipeline :: proc(app: ^Application) {
 			count = 1,
 		},
 		// Memory layout for input/output resources. We don't need any for now
-		layout = nil,
+		layout = app.pipeline_layout,
 	}
 
 	app.render_pipeline = wgpu.DeviceCreateRenderPipeline(app.device, &render_pipeline_descriptor)
@@ -458,3 +522,4 @@ load_shader_code :: proc() -> string {
 
 	return strings.clone_from_bytes(bytes)
 }
+
