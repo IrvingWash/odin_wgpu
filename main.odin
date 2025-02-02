@@ -53,6 +53,12 @@ main :: proc() {
 	app_terminate(app)
 }
 
+MyUniforms :: struct {
+	color: [4]f32,
+	time:  f32,
+	_pad:  [3]f32,
+}
+
 ctx: runtime.Context
 
 Application :: struct {
@@ -171,8 +177,12 @@ app_terminate :: proc(app: Application) {
 app_main_loop :: proc(app: ^Application) {
 	glfw.PollEvents()
 
-	t := f32(glfw.GetTime())
-	wgpu.QueueWriteBuffer(app.queue, app.uniform_buffer, 0, &t, size_of(f32))
+	my_uniforms := MyUniforms {
+		color = {0, 1, 0.4, 1},
+		time  = f32(glfw.GetTime()),
+	}
+
+	wgpu.QueueWriteBuffer(app.queue, app.uniform_buffer, 0, &my_uniforms, size_of(MyUniforms))
 
 	// Get the next view in the swap chain to draw on
 	texture_view, texture_view_ok := get_next_texture_view(app^).?
@@ -248,7 +258,7 @@ init_bind_groups :: proc(app: ^Application) {
 		binding = 0,
 		buffer  = app.uniform_buffer,
 		offset  = 0,
-		size    = 4 * size_of(f32),
+		size    = size_of(MyUniforms),
 	}
 
 	app.bind_group = wgpu.DeviceCreateBindGroup(
@@ -296,12 +306,17 @@ init_buffers :: proc(app: ^Application) {
 	)
 
 	// Create uniform buffer
-	buffer_descriptor.size = 4 * size_of(f32)
+	buffer_descriptor.size = 4 * size_of(MyUniforms)
 	buffer_descriptor.usage = {.CopyDst, .Uniform}
 	app.uniform_buffer = wgpu.DeviceCreateBuffer(app.device, &buffer_descriptor)
 
-	current_time := 1
-	wgpu.QueueWriteBuffer(app.queue, app.uniform_buffer, 0, &current_time, size_of(f32))
+	wgpu.QueueWriteBuffer(
+		app.queue,
+		app.uniform_buffer,
+		0,
+		&MyUniforms{time = 10, color = {0, 1, 0.4, 1}},
+		size_of(MyUniforms),
+	)
 }
 
 app_is_running :: proc(app: Application) -> bool {
@@ -341,11 +356,11 @@ initialize_render_pipeline :: proc(app: ^Application) {
 		&wgpu.BindGroupLayoutDescriptor {
 			entryCount = 1,
 			entries = &wgpu.BindGroupLayoutEntry {
-				visibility = {.Vertex},
+				visibility = {.Vertex, .Fragment},
 				binding = 0,
 				buffer = wgpu.BufferBindingLayout {
 					type = .Uniform,
-					minBindingSize = 4 * size_of(f32),
+					minBindingSize = size_of(MyUniforms),
 				},
 			},
 		},
