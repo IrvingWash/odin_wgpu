@@ -415,7 +415,7 @@ initialize_render_pipeline :: proc(app: ^Application) {
 						operation = .Add,
 					},
 				},
-				writeMask = wgpu.ColorWriteMaskFlags{.Red, .Green, .Blue, .Alpha},
+				writeMask = wgpu.ColorWriteMaskFlags_All,
 			},
 		},
 		// Another optimization config. Hides overlapping pixels based on the depth.
@@ -424,6 +424,7 @@ initialize_render_pipeline :: proc(app: ^Application) {
 		multisample = wgpu.MultisampleState {
 			// Samples per pixel
 			count = 1,
+			mask  = ~u32(0),
 		},
 		// Memory layout for input/output resources. We don't need any for now
 		layout = app.pipeline_layout,
