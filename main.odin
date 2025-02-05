@@ -20,12 +20,14 @@ WINDOW_WIDTH :: 800
 WINDOW_HEIGHT :: 600
 
 State :: struct {
-	window:          glfw.WindowHandle,
-	surface:         wgpu.Surface,
-	device:          wgpu.Device,
-	queue:           wgpu.Queue,
-	render_pipeline: wgpu.RenderPipeline,
-	texture_format:  wgpu.TextureFormat,
+	window:                 glfw.WindowHandle,
+	surface:                wgpu.Surface,
+	device:                 wgpu.Device,
+	queue:                  wgpu.Queue,
+	render_pipeline:        wgpu.RenderPipeline,
+	texture_format:         wgpu.TextureFormat,
+	vertex_position_buffer: wgpu.Buffer,
+	vertex_count:           uint,
 }
 
 state := State{}
@@ -74,6 +76,9 @@ init :: proc() {
 
 	// Render pipeline
 	state.render_pipeline = create_render_pipeline()
+
+	// Vertex position buffer
+	state.vertex_position_buffer, state.vertex_count = create_vertex_position_buffer()
 }
 
 run :: proc() {
@@ -98,7 +103,14 @@ run :: proc() {
 		)
 
 		wgpu.RenderPassEncoderSetPipeline(render_pass_encoder, state.render_pipeline)
-		wgpu.RenderPassEncoderDraw(render_pass_encoder, 3, 1, 0, 0)
+		wgpu.RenderPassEncoderSetVertexBuffer(
+			render_pass_encoder,
+			0,
+			state.vertex_position_buffer,
+			0,
+			wgpu.BufferGetSize(state.vertex_position_buffer),
+		)
+		wgpu.RenderPassEncoderDraw(render_pass_encoder, u32(state.vertex_count), 1, 0, 0)
 		wgpu.RenderPassEncoderEnd(render_pass_encoder)
 		wgpu.RenderPassEncoderRelease(render_pass_encoder)
 
@@ -172,8 +184,17 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 			vertex = wgpu.VertexState {
 				entryPoint = "vs_main",
 				module = shader_module,
-				bufferCount = 0,
-				buffers = nil,
+				bufferCount = 1,
+				buffers = &wgpu.VertexBufferLayout {
+					arrayStride = u64(2 * size_of(f32)),
+					stepMode = .Vertex,
+					attributeCount = 1,
+					attributes = &wgpu.VertexAttribute {
+						format = .Float32x2,
+						offset = 0,
+						shaderLocation = 0,
+					},
+				},
 			},
 			primitive = wgpu.PrimitiveState {
 				topology         = .TriangleList,
@@ -213,6 +234,29 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 	wgpu.ShaderModuleRelease(shader_module)
 
 	return render_pipeline
+}
+
+create_vertex_position_buffer :: proc() -> (wgpu.Buffer, uint) {
+	// odinfmt: disable
+	positions := [12]f32{
+		-0.5, -0.5,
+		+0.5, -0.5,
+		+0.0, +0.5,
+
+		-0.55, -0.5,
+		-0.05, +0.5,
+		-0.55, +0.5,
+	}
+	// odinfmt: enable
+
+	buffer := wgpu.DeviceCreateBuffer(
+		state.device,
+		&wgpu.BufferDescriptor{size = size_of(positions), usage = {.CopyDst, .Vertex}},
+	)
+
+	wgpu.QueueWriteBuffer(state.queue, buffer, 0, &positions, uint(wgpu.BufferGetSize(buffer)))
+
+	return buffer, len(positions) / 2
 }
 
 request_device :: proc(adapter: wgpu.Adapter) -> wgpu.Device {
