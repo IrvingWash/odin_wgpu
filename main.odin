@@ -2,6 +2,8 @@ package main
 
 import "base:runtime"
 import "core:fmt"
+import "core:os"
+import "core:strings"
 import "vendor:glfw"
 import "vendor:wgpu"
 import "vendor:wgpu/glfwglue"
@@ -23,6 +25,7 @@ State :: struct {
 	device:          wgpu.Device,
 	queue:           wgpu.Queue,
 	render_pipeline: wgpu.RenderPipeline,
+	texture_format:  wgpu.TextureFormat,
 }
 
 state := State{}
@@ -54,6 +57,8 @@ init :: proc() {
 	state.queue = wgpu.DeviceGetQueue(state.device)
 
 	// Surface configuration
+	state.texture_format = .BGRA8Unorm
+
 	wgpu.SurfaceConfigure(
 		state.surface,
 		&wgpu.SurfaceConfiguration {
@@ -61,7 +66,7 @@ init :: proc() {
 			usage = {.RenderAttachment},
 			width = WINDOW_WIDTH,
 			height = WINDOW_HEIGHT,
-			format = .BGRA8Unorm,
+			format = state.texture_format,
 			alphaMode = .Auto,
 			presentMode = .Fifo,
 		},
@@ -92,6 +97,8 @@ run :: proc() {
 			},
 		)
 
+		wgpu.RenderPassEncoderSetPipeline(render_pass_encoder, state.render_pipeline)
+		wgpu.RenderPassEncoderDraw(render_pass_encoder, 3, 1, 0, 0)
 		wgpu.RenderPassEncoderEnd(render_pass_encoder)
 		wgpu.RenderPassEncoderRelease(render_pass_encoder)
 
@@ -141,7 +148,23 @@ get_next_texture_view :: proc() -> wgpu.TextureView {
 }
 
 create_render_pipeline :: proc() -> wgpu.RenderPipeline {
-	shader_module := wgpu.DeviceCreateShaderModule(state.device, &wgpu.ShaderModuleDescriptor{})
+	shader_source_bytes, _ := os.read_entire_file("shader.wgsl")
+	shader_source := strings.clone_from_bytes(shader_source_bytes)
+	delete(shader_source_bytes)
+	shader_source_raw := strings.clone_to_cstring(shader_source)
+	delete(shader_source)
+
+	shader_module := wgpu.DeviceCreateShaderModule(
+		state.device,
+		&wgpu.ShaderModuleDescriptor {
+			nextInChain = &wgpu.ShaderModuleWGSLDescriptor {
+				sType = .ShaderModuleWGSLDescriptor,
+				code = shader_source_raw,
+			},
+		},
+	)
+
+	delete(shader_source_raw)
 
 	render_pipeline := wgpu.DeviceCreateRenderPipeline(
 		state.device,
@@ -156,16 +179,14 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 				topology         = .TriangleList,
 				stripIndexFormat = .Undefined, // What is this?
 				frontFace        = .CCW,
-				cullMode         = .Front,
+				cullMode         = .Back,
 			},
 			fragment = &wgpu.FragmentState {
 				entryPoint = "fs_main",
 				module = shader_module,
 				targetCount = 1,
 				targets = &wgpu.ColorTargetState {
-					format = wgpu.TextureGetFormat(
-						wgpu.SurfaceGetCurrentTexture(state.surface).texture,
-					),
+					format = state.texture_format,
 					blend = &wgpu.BlendState {
 						color = wgpu.BlendComponent {
 							srcFactor = .SrcAlpha,
