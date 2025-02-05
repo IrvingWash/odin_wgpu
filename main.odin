@@ -3,6 +3,7 @@ package main
 import "base:runtime"
 import "core:fmt"
 import "core:os"
+import "core:slice"
 import "core:strings"
 import "vendor:glfw"
 import "vendor:wgpu"
@@ -250,48 +251,40 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 }
 
 create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint) {
-	// Vertex buffer
-	// odinfmt: disable
-	vertices := [20]f32{
-		// x, y,    r  g  b
-		-0.5, -0.5, 1, 0, 0,
-		+0.5, -0.5, 0, 1, 0,
-		+0.5, +0.5, 0, 0, 1,
-        -0.5, +0.5, 1, 1, 0,
-	}
-	// odinfmt: enable
+	geometry := load_geometry("geometry.txt")
+	defer destroy_geometry(geometry)
+
 	vertex_buffer := wgpu.DeviceCreateBuffer(
 		state.device,
-		&wgpu.BufferDescriptor{size = size_of(vertices), usage = {.CopyDst, .Vertex}},
+		&wgpu.BufferDescriptor {
+			size = u64(slice.size(geometry.vertices[:])),
+			usage = {.CopyDst, .Vertex},
+		},
 	)
 	wgpu.QueueWriteBuffer(
 		state.queue,
 		vertex_buffer,
 		0,
-		&vertices,
+		raw_data(geometry.vertices),
 		uint(wgpu.BufferGetSize(vertex_buffer)),
 	)
 
-	// Index buffer
-	// odinfmt: disable
-	indices := [6]u16{
-		0, 1, 2,
-		0, 2, 3,
-	}
-	// odinfmt: enable
 	index_buffer := wgpu.DeviceCreateBuffer(
 		state.device,
-		&wgpu.BufferDescriptor{size = size_of(indices), usage = {.CopyDst, .Index}},
+		&wgpu.BufferDescriptor {
+			size = u64(ceil_to_multiple(slice.size(geometry.indices[:]), 4)),
+			usage = {.CopyDst, .Index},
+		},
 	)
 	wgpu.QueueWriteBuffer(
 		state.queue,
 		index_buffer,
 		0,
-		&indices,
+		raw_data(geometry.indices),
 		uint(wgpu.BufferGetSize(index_buffer)),
 	)
 
-	return vertex_buffer, len(vertices) / 5, index_buffer, len(indices)
+	return vertex_buffer, len(geometry.vertices) / 5, index_buffer, len(geometry.indices)
 }
 
 request_device :: proc(adapter: wgpu.Adapter) -> wgpu.Device {

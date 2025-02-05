@@ -13,11 +13,14 @@ fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
 
     let ratio = 640.0 / 480.0;
+    let offset = vec2f(-0.6875, -0.463);
 
-   output.position = vec4f(input.vertex_position.x, input.vertex_position.y * ratio, 0, 1);
-   output.color = input.color;
+    let position_with_offset = input.vertex_position + offset;
 
-   return output;
+     output.position = vec4f(position_with_offset.x, position_with_offset.y * ratio, 0, 1);
+     output.color = input.color;
+
+     return output;
 }
 
 @fragment
