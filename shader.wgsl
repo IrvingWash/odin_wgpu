@@ -12,7 +12,9 @@ struct VertexOutput {
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
 
-   output.position = vec4f(input.vertex_position, 0, 1);
+    let ratio = 640.0 / 480.0;
+
+   output.position = vec4f(input.vertex_position.x, input.vertex_position.y * ratio, 0, 1);
    output.color = input.color;
 
    return output;
