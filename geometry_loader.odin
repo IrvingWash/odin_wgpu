@@ -47,6 +47,7 @@ load_geometry :: proc(path: string) -> Geometry {
 
 		if current_section == .Vertices {
 			components, _ := strings.split(line, " ")
+			defer delete(components)
 
 			for component in components {
 				if component == "" {
@@ -58,6 +59,7 @@ load_geometry :: proc(path: string) -> Geometry {
 		}
 		if current_section == .Indices {
 			components, _ := strings.split(line, " ")
+			defer delete(components)
 
 			for component in components {
 				if component == "" {

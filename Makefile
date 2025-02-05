@@ -8,4 +8,4 @@ vet_flags = -warnings-as-errors \
 
 start:
 	@mkdir -p build
-	@odin run . -out:./build/app ${vet_flags}
+	@odin run . -out:./build/app ${vet_flags} -debug
