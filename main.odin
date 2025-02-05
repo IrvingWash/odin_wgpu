@@ -18,10 +18,11 @@ WINDOW_WIDTH :: 800
 WINDOW_HEIGHT :: 600
 
 State :: struct {
-	window:  glfw.WindowHandle,
-	surface: wgpu.Surface,
-	device:  wgpu.Device,
-	queue:   wgpu.Queue,
+	window:          glfw.WindowHandle,
+	surface:         wgpu.Surface,
+	device:          wgpu.Device,
+	queue:           wgpu.Queue,
+	render_pipeline: wgpu.RenderPipeline,
 }
 
 state := State{}
@@ -65,6 +66,9 @@ init :: proc() {
 			presentMode = .Fifo,
 		},
 	)
+
+	// Render pipeline
+	state.render_pipeline = create_render_pipeline()
 }
 
 run :: proc() {
@@ -106,6 +110,7 @@ run :: proc() {
 }
 
 destroy :: proc() {
+	wgpu.RenderPipelineRelease(state.render_pipeline)
 	wgpu.QueueRelease(state.queue)
 	wgpu.DeviceRelease(state.device)
 	wgpu.SurfaceUnconfigure(state.surface)
@@ -133,6 +138,60 @@ get_next_texture_view :: proc() -> wgpu.TextureView {
 	// wgpu.TextureRelease(surface_texture.texture)
 
 	return texture_view
+}
+
+create_render_pipeline :: proc() -> wgpu.RenderPipeline {
+	shader_module := wgpu.DeviceCreateShaderModule(state.device, &wgpu.ShaderModuleDescriptor{})
+
+	render_pipeline := wgpu.DeviceCreateRenderPipeline(
+		state.device,
+		&wgpu.RenderPipelineDescriptor {
+			vertex = wgpu.VertexState {
+				entryPoint = "vs_main",
+				module = shader_module,
+				bufferCount = 0,
+				buffers = nil,
+			},
+			primitive = wgpu.PrimitiveState {
+				topology         = .TriangleList,
+				stripIndexFormat = .Undefined, // What is this?
+				frontFace        = .CCW,
+				cullMode         = .Front,
+			},
+			fragment = &wgpu.FragmentState {
+				entryPoint = "fs_main",
+				module = shader_module,
+				targetCount = 1,
+				targets = &wgpu.ColorTargetState {
+					format = wgpu.TextureGetFormat(
+						wgpu.SurfaceGetCurrentTexture(state.surface).texture,
+					),
+					blend = &wgpu.BlendState {
+						color = wgpu.BlendComponent {
+							srcFactor = .SrcAlpha,
+							dstFactor = .OneMinusSrcAlpha,
+							operation = .Add,
+						},
+						alpha = wgpu.BlendComponent {
+							srcFactor = .Zero,
+							dstFactor = .One,
+							operation = .Add,
+						},
+					},
+					writeMask = wgpu.ColorWriteMaskFlags_All,
+				},
+			},
+			multisample = wgpu.MultisampleState {
+				count = 1,
+				mask = ~u32(0),
+				alphaToCoverageEnabled = false,
+			},
+		},
+	)
+
+	wgpu.ShaderModuleRelease(shader_module)
+
+	return render_pipeline
 }
 
 request_device :: proc(adapter: wgpu.Adapter) -> wgpu.Device {
