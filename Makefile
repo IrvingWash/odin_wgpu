@@ -1,2 +1,3 @@
 start:
-	@odin run .
+	@mkdir -p build
+	@odin run . -out:./build/app
