@@ -16,18 +16,20 @@ main :: proc() {
 	destroy()
 }
 
-WINDOW_WIDTH :: 800
-WINDOW_HEIGHT :: 600
+WINDOW_WIDTH :: 640
+WINDOW_HEIGHT :: 480
 
 State :: struct {
-	window:                 glfw.WindowHandle,
-	surface:                wgpu.Surface,
-	device:                 wgpu.Device,
-	queue:                  wgpu.Queue,
-	render_pipeline:        wgpu.RenderPipeline,
-	texture_format:         wgpu.TextureFormat,
-	vertex_position_buffer: wgpu.Buffer,
-	vertex_count:           uint,
+	window:          glfw.WindowHandle,
+	surface:         wgpu.Surface,
+	device:          wgpu.Device,
+	queue:           wgpu.Queue,
+	render_pipeline: wgpu.RenderPipeline,
+	texture_format:  wgpu.TextureFormat,
+	vertex_buffer:   wgpu.Buffer,
+	vertex_count:    uint,
+	index_buffer:    wgpu.Buffer,
+	index_count:     uint,
 }
 
 state := State{}
@@ -78,7 +80,8 @@ init :: proc() {
 	state.render_pipeline = create_render_pipeline()
 
 	// Vertex position buffer
-	state.vertex_position_buffer, state.vertex_count = create_vertex_buffer()
+	state.vertex_buffer, state.vertex_count, state.index_buffer, state.index_count =
+		create_buffers()
 }
 
 run :: proc() {
@@ -106,11 +109,18 @@ run :: proc() {
 		wgpu.RenderPassEncoderSetVertexBuffer(
 			render_pass_encoder,
 			0,
-			state.vertex_position_buffer,
+			state.vertex_buffer,
 			0,
-			wgpu.BufferGetSize(state.vertex_position_buffer),
+			wgpu.BufferGetSize(state.vertex_buffer),
 		)
-		wgpu.RenderPassEncoderDraw(render_pass_encoder, u32(state.vertex_count), 1, 0, 0)
+		wgpu.RenderPassEncoderSetIndexBuffer(
+			render_pass_encoder,
+			state.index_buffer,
+			.Uint16,
+			0,
+			wgpu.BufferGetSize(state.index_buffer),
+		)
+		wgpu.RenderPassEncoderDrawIndexed(render_pass_encoder, u32(state.index_count), 1, 0, 0, 0)
 		wgpu.RenderPassEncoderEnd(render_pass_encoder)
 		wgpu.RenderPassEncoderRelease(render_pass_encoder)
 
@@ -129,6 +139,8 @@ run :: proc() {
 }
 
 destroy :: proc() {
+	wgpu.BufferRelease(state.index_buffer)
+	wgpu.BufferRelease(state.vertex_buffer)
 	wgpu.RenderPipelineRelease(state.render_pipeline)
 	wgpu.QueueRelease(state.queue)
 	wgpu.DeviceRelease(state.device)
@@ -237,28 +249,49 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 	return render_pipeline
 }
 
-create_vertex_buffer :: proc() -> (wgpu.Buffer, uint) {
+create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint) {
+	// Vertex buffer
 	// odinfmt: disable
-	vertices := [30]f32{
-        // x, y,    r  g  b
+	vertices := [20]f32{
+		// x, y,    r  g  b
 		-0.5, -0.5, 1, 0, 0,
 		+0.5, -0.5, 0, 1, 0,
-		+0.0, +0.5, 0, 0, 1,
-
-		-0.55, -0.5, 1, 1, 0,
-		-0.05, +0.5, 1, 0, 1,
-		-0.55, +0.5, 0, 1, 1,
+		+0.5, +0.5, 0, 0, 1,
+        -0.5, +0.5, 1, 1, 0,
 	}
 	// odinfmt: enable
-
-	buffer := wgpu.DeviceCreateBuffer(
+	vertex_buffer := wgpu.DeviceCreateBuffer(
 		state.device,
 		&wgpu.BufferDescriptor{size = size_of(vertices), usage = {.CopyDst, .Vertex}},
 	)
+	wgpu.QueueWriteBuffer(
+		state.queue,
+		vertex_buffer,
+		0,
+		&vertices,
+		uint(wgpu.BufferGetSize(vertex_buffer)),
+	)
 
-	wgpu.QueueWriteBuffer(state.queue, buffer, 0, &vertices, uint(wgpu.BufferGetSize(buffer)))
+	// Index buffer
+	// odinfmt: disable
+	indices := [6]u16{
+		0, 1, 2,
+		0, 2, 3,
+	}
+	// odinfmt: enable
+	index_buffer := wgpu.DeviceCreateBuffer(
+		state.device,
+		&wgpu.BufferDescriptor{size = size_of(indices), usage = {.CopyDst, .Index}},
+	)
+	wgpu.QueueWriteBuffer(
+		state.queue,
+		index_buffer,
+		0,
+		&indices,
+		uint(wgpu.BufferGetSize(index_buffer)),
+	)
 
-	return buffer, len(vertices) / 5
+	return vertex_buffer, len(vertices) / 5, index_buffer, len(indices)
 }
 
 request_device :: proc(adapter: wgpu.Adapter) -> wgpu.Device {
