@@ -78,7 +78,7 @@ init :: proc() {
 	state.render_pipeline = create_render_pipeline()
 
 	// Vertex position buffer
-	state.vertex_position_buffer, state.vertex_count = create_vertex_position_buffer()
+	state.vertex_position_buffer, state.vertex_count = create_vertex_buffer()
 }
 
 run :: proc() {
@@ -97,7 +97,7 @@ run :: proc() {
 					view = texture_view,
 					loadOp = .Clear,
 					storeOp = .Store,
-					clearValue = wgpu.Color{0.7, 0, 0, 1},
+					clearValue = wgpu.Color{0.05, 0.05, 0.05, 1},
 				},
 			},
 		)
@@ -178,6 +178,11 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 
 	delete(shader_source_raw)
 
+	vertex_attributes := [?]wgpu.VertexAttribute {
+		wgpu.VertexAttribute{format = .Float32x2, offset = 0, shaderLocation = 0},
+		wgpu.VertexAttribute{format = .Float32x3, offset = 2 * size_of(f32), shaderLocation = 1},
+	}
+
 	render_pipeline := wgpu.DeviceCreateRenderPipeline(
 		state.device,
 		&wgpu.RenderPipelineDescriptor {
@@ -186,14 +191,10 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 				module = shader_module,
 				bufferCount = 1,
 				buffers = &wgpu.VertexBufferLayout {
-					arrayStride = u64(2 * size_of(f32)),
+					arrayStride = u64(5 * size_of(f32)),
 					stepMode = .Vertex,
-					attributeCount = 1,
-					attributes = &wgpu.VertexAttribute {
-						format = .Float32x2,
-						offset = 0,
-						shaderLocation = 0,
-					},
+					attributeCount = len(vertex_attributes),
+					attributes = raw_data(vertex_attributes[:]),
 				},
 			},
 			primitive = wgpu.PrimitiveState {
@@ -236,27 +237,28 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 	return render_pipeline
 }
 
-create_vertex_position_buffer :: proc() -> (wgpu.Buffer, uint) {
+create_vertex_buffer :: proc() -> (wgpu.Buffer, uint) {
 	// odinfmt: disable
-	positions := [12]f32{
-		-0.5, -0.5,
-		+0.5, -0.5,
-		+0.0, +0.5,
+	vertices := [30]f32{
+        // x, y,    r  g  b
+		-0.5, -0.5, 1, 0, 0,
+		+0.5, -0.5, 0, 1, 0,
+		+0.0, +0.5, 0, 0, 1,
 
-		-0.55, -0.5,
-		-0.05, +0.5,
-		-0.55, +0.5,
+		-0.55, -0.5, 1, 1, 0,
+		-0.05, +0.5, 1, 0, 1,
+		-0.55, +0.5, 0, 1, 1,
 	}
 	// odinfmt: enable
 
 	buffer := wgpu.DeviceCreateBuffer(
 		state.device,
-		&wgpu.BufferDescriptor{size = size_of(positions), usage = {.CopyDst, .Vertex}},
+		&wgpu.BufferDescriptor{size = size_of(vertices), usage = {.CopyDst, .Vertex}},
 	)
 
-	wgpu.QueueWriteBuffer(state.queue, buffer, 0, &positions, uint(wgpu.BufferGetSize(buffer)))
+	wgpu.QueueWriteBuffer(state.queue, buffer, 0, &vertices, uint(wgpu.BufferGetSize(buffer)))
 
-	return buffer, len(positions) / 2
+	return buffer, len(vertices) / 5
 }
 
 request_device :: proc(adapter: wgpu.Adapter) -> wgpu.Device {
