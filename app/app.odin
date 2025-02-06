@@ -219,8 +219,8 @@ create_render_pipeline :: proc() -> (wgpu.RenderPipeline, wgpu.BindGroupLayout) 
 	delete(shader_source_raw)
 
 	vertex_attributes := [?]wgpu.VertexAttribute {
-		wgpu.VertexAttribute{format = .Float32x2, offset = 0, shaderLocation = 0},
-		wgpu.VertexAttribute{format = .Float32x3, offset = 2 * size_of(f32), shaderLocation = 1},
+		wgpu.VertexAttribute{format = .Float32x3, offset = 0, shaderLocation = 0},
+		wgpu.VertexAttribute{format = .Float32x3, offset = 3 * size_of(f32), shaderLocation = 1},
 	}
 
 	bind_group_layout := wgpu.DeviceCreateBindGroupLayout(
@@ -254,7 +254,7 @@ create_render_pipeline :: proc() -> (wgpu.RenderPipeline, wgpu.BindGroupLayout) 
 				module = shader_module,
 				bufferCount = 1,
 				buffers = &wgpu.VertexBufferLayout {
-					arrayStride = u64(5 * size_of(f32)),
+					arrayStride = u64(6 * size_of(f32)),
 					stepMode = .Vertex,
 					attributeCount = len(vertex_attributes),
 					attributes = raw_data(vertex_attributes[:]),
@@ -367,7 +367,7 @@ create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint, wgpu.Buffer) 
 	)
 
 	return vertex_buffer,
-		len(geometry.vertices) / 5,
+		len(geometry.vertices) / 6,
 		index_buffer,
 		len(geometry.indices),
 		uniform_buffer
