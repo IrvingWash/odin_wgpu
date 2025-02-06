@@ -27,7 +27,6 @@ State :: struct {
 	index_buffer:      wgpu.Buffer,
 	index_count:       uint,
 	uniform_buffer:    wgpu.Buffer,
-	pipeline_layout:   wgpu.PipelineLayout,
 	bind_group_layout: wgpu.BindGroupLayout,
 	bind_group:        wgpu.BindGroup,
 }
@@ -78,9 +77,7 @@ init :: proc() {
 	)
 
 	// Render pipeline
-	state.render_pipeline, state.pipeline_layout, state.bind_group_layout = create_render_pipeline(
-		
-	)
+	state.render_pipeline, state.bind_group_layout = create_render_pipeline()
 
 	// Vertex position buffer
 	state.vertex_buffer, state.vertex_count, state.index_buffer, state.index_count, state.uniform_buffer =
@@ -148,7 +145,6 @@ run :: proc() {
 destroy :: proc() {
 	wgpu.BindGroupRelease(state.bind_group)
 	wgpu.BindGroupLayoutRelease(state.bind_group_layout)
-	wgpu.PipelineLayoutRelease(state.pipeline_layout)
 	wgpu.BufferRelease(state.uniform_buffer)
 	wgpu.BufferRelease(state.index_buffer)
 	wgpu.BufferRelease(state.vertex_buffer)
@@ -184,12 +180,7 @@ get_next_texture_view :: proc() -> wgpu.TextureView {
 }
 
 @(private = "file")
-create_render_pipeline :: proc(
-) -> (
-	wgpu.RenderPipeline,
-	wgpu.PipelineLayout,
-	wgpu.BindGroupLayout,
-) {
+create_render_pipeline :: proc() -> (wgpu.RenderPipeline, wgpu.BindGroupLayout) {
 	shader_source_bytes, _ := os.read_entire_file("./app/shader.wgsl")
 	shader_source := strings.clone_from_bytes(shader_source_bytes)
 	delete(shader_source_bytes)
@@ -286,9 +277,10 @@ create_render_pipeline :: proc(
 		},
 	)
 
+	wgpu.PipelineLayoutRelease(pipeline_layout)
 	wgpu.ShaderModuleRelease(shader_module)
 
-	return render_pipeline, pipeline_layout, bind_group_layout
+	return render_pipeline, bind_group_layout
 }
 
 @(private = "file")
