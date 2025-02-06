@@ -16,19 +16,21 @@ WINDOW_HEIGHT :: 480
 
 @(private = "file")
 State :: struct {
-	window:            glfw.WindowHandle,
-	surface:           wgpu.Surface,
-	device:            wgpu.Device,
-	queue:             wgpu.Queue,
-	render_pipeline:   wgpu.RenderPipeline,
-	texture_format:    wgpu.TextureFormat,
-	vertex_buffer:     wgpu.Buffer,
-	vertex_count:      uint,
-	index_buffer:      wgpu.Buffer,
-	index_count:       uint,
-	uniform_buffer:    wgpu.Buffer,
-	bind_group_layout: wgpu.BindGroupLayout,
-	bind_group:        wgpu.BindGroup,
+	window:             glfw.WindowHandle,
+	surface:            wgpu.Surface,
+	device:             wgpu.Device,
+	queue:              wgpu.Queue,
+	render_pipeline:    wgpu.RenderPipeline,
+	texture_format:     wgpu.TextureFormat,
+	vertex_buffer:      wgpu.Buffer,
+	vertex_count:       uint,
+	index_buffer:       wgpu.Buffer,
+	index_count:        uint,
+	uniform_buffer:     wgpu.Buffer,
+	bind_group_layout:  wgpu.BindGroupLayout,
+	bind_group:         wgpu.BindGroup,
+	depth_texture:      wgpu.Texture,
+	depth_texture_view: wgpu.TextureView,
 }
 
 @(private = "file")
@@ -95,6 +97,33 @@ init :: proc() {
 
 	// Bind groups
 	state.bind_group = create_bind_groups()
+
+	// Depth texture
+	depth_texture_format := wgpu.TextureFormat.Depth24Plus
+	state.depth_texture = wgpu.DeviceCreateTexture(
+		state.device,
+		&wgpu.TextureDescriptor {
+			dimension = ._2D,
+			format = depth_texture_format,
+			mipLevelCount = 1,
+			sampleCount = 1,
+			size = {width = WINDOW_WIDTH, height = WINDOW_HEIGHT, depthOrArrayLayers = 1},
+			usage = {.RenderAttachment},
+			viewFormatCount = 1,
+			viewFormats = &depth_texture_format,
+		},
+	)
+
+	state.depth_texture_view = wgpu.TextureCreateView(
+		state.depth_texture,
+		&wgpu.TextureViewDescriptor {
+			aspect = .DepthOnly,
+			arrayLayerCount = 1,
+			mipLevelCount = 1,
+			dimension = ._2D,
+			format = depth_texture_format,
+		},
+	)
 }
 
 run :: proc() {
@@ -116,6 +145,17 @@ run :: proc() {
 					loadOp = .Clear,
 					storeOp = .Store,
 					clearValue = wgpu.Color{0.05, 0.05, 0.05, 1},
+				},
+				depthStencilAttachment = &wgpu.RenderPassDepthStencilAttachment {
+					view = state.depth_texture_view,
+					depthClearValue = 1,
+					depthLoadOp = .Clear,
+					depthStoreOp = .Store,
+					depthReadOnly = false,
+					stencilLoadOp = .Clear,
+					stencilStoreOp = .Store,
+					stencilReadOnly = true,
+					stencilClearValue = 0,
 				},
 			},
 		)
@@ -162,6 +202,9 @@ run :: proc() {
 }
 
 destroy :: proc() {
+	wgpu.TextureViewRelease(state.depth_texture_view)
+	wgpu.TextureDestroy(state.depth_texture)
+	wgpu.TextureRelease(state.depth_texture)
 	wgpu.BindGroupRelease(state.bind_group)
 	wgpu.BindGroupLayoutRelease(state.bind_group_layout)
 	wgpu.BufferRelease(state.uniform_buffer)
@@ -291,6 +334,25 @@ create_render_pipeline :: proc() -> (wgpu.RenderPipeline, wgpu.BindGroupLayout) 
 				count = 1,
 				mask = ~u32(0),
 				alphaToCoverageEnabled = false,
+			},
+			depthStencil = &wgpu.DepthStencilState {
+				depthCompare = .Less,
+				depthWriteEnabled = true,
+				format = .Depth24Plus,
+				stencilReadMask = 0,
+				stencilWriteMask = 0,
+				stencilFront = wgpu.StencilFaceState {
+					compare = .Always,
+					failOp = .Keep,
+					depthFailOp = .Keep,
+					passOp = .Keep,
+				},
+				stencilBack = wgpu.StencilFaceState {
+					compare = .Always,
+					failOp = .Keep,
+					depthFailOp = .Keep,
+					passOp = .Keep,
+				},
 			},
 			layout = pipeline_layout,
 		},

@@ -31,7 +31,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 		alpha * input.position.z - beta * input.position.y,
 	);
 
-	output.position = vec4f(position.x, position.y * ratio, 0.0, 1.0);
+	output.position = vec4f(position.x, position.y * ratio, position.z * 0.5 + 0.5, 1);
 	output.color = input.color;
 
 	return output;
