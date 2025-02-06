@@ -6,7 +6,7 @@ struct MyUniforms {
 @group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 
 struct VertexInput {
-    @location(0) vertex_position: vec3f,
+    @location(0) position: vec3f,
     @location(1) color: vec3f,
 };
 
@@ -17,18 +17,24 @@ struct VertexOutput {
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
-    var output: VertexOutput;
+	var output: VertexOutput;
+	let ratio = 640.0 / 480.0;
 
-    let ratio = 640.0 / 480.0;
-    var offset = vec3f(0);
-    offset += 0.3 * vec3f(cos(uMyUniforms.time), sin(uMyUniforms.time), 1);
+	let angle = uMyUniforms.time;
 
-    let position_with_offset = input.vertex_position + offset;
+	// Rotate the position around the X axis by "mixing" a bit of Y and Z in the original Y and Z.
+	let alpha = cos(angle);
+	let beta = sin(angle);
+	var position = vec3f(
+		input.position.x,
+		alpha * input.position.y + beta * input.position.z,
+		alpha * input.position.z - beta * input.position.y,
+	);
 
-     output.position = vec4f(position_with_offset.x, position_with_offset.y * ratio, 0, 1);
-     output.color = input.color;
+	output.position = vec4f(position.x, position.y * ratio, 0.0, 1.0);
+	output.color = input.color;
 
-     return output;
+	return output;
 }
 
 @fragment

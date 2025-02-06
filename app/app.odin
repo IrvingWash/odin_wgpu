@@ -264,7 +264,7 @@ create_render_pipeline :: proc() -> (wgpu.RenderPipeline, wgpu.BindGroupLayout) 
 				topology         = .TriangleList,
 				stripIndexFormat = .Undefined, // What is this?
 				frontFace        = .CCW,
-				cullMode         = .Back,
+				cullMode         = .None,
 			},
 			fragment = &wgpu.FragmentState {
 				entryPoint = "fs_main",
