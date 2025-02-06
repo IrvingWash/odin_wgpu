@@ -123,6 +123,8 @@ run :: proc() {
 			0,
 			wgpu.BufferGetSize(state.index_buffer),
 		)
+		current_time: f32 = f32(glfw.GetTime())
+		wgpu.QueueWriteBuffer(state.queue, state.uniform_buffer, 0, &current_time, size_of(f32))
 		wgpu.RenderPassEncoderSetBindGroup(render_pass_encoder, 0, state.bind_group)
 		wgpu.RenderPassEncoderDrawIndexed(render_pass_encoder, u32(state.index_count), 1, 0, 0, 0)
 		wgpu.RenderPassEncoderEnd(render_pass_encoder)
@@ -339,8 +341,6 @@ create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint, wgpu.Buffer) 
 		state.device,
 		&wgpu.BufferDescriptor{size = 4 * size_of(f32), usage = {.CopyDst, .Uniform}},
 	)
-	current_time: f32 = 1
-	wgpu.QueueWriteBuffer(state.queue, uniform_buffer, 0, &current_time, size_of(f32))
 
 	return vertex_buffer,
 		len(geometry.vertices) / 5,
