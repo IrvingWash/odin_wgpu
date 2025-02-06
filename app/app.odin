@@ -35,6 +35,9 @@ State :: struct {
 state := State{}
 
 init :: proc() {
+	// FPS manager
+	fps_manager_init(60)
+
 	// Window
 	if !glfw.Init() {
 		panic("Failed to initialize GLWF")
@@ -89,6 +92,8 @@ init :: proc() {
 
 run :: proc() {
 	for !glfw.WindowShouldClose(state.window) {
+		cap_fps()
+
 		glfw.PollEvents()
 
 		texture_view := get_next_texture_view()
