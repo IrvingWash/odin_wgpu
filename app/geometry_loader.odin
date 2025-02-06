@@ -1,4 +1,4 @@
-package main
+package app
 
 import "core:os"
 import "core:strconv"
@@ -78,4 +78,3 @@ destroy_geometry :: proc(geometry: Geometry) {
 	delete(geometry.vertices)
 	delete(geometry.indices)
 }
-

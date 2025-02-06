@@ -1,4 +1,4 @@
-package main
+package app
 
 import "base:runtime"
 import "core:fmt"
@@ -171,7 +171,7 @@ get_next_texture_view :: proc() -> wgpu.TextureView {
 
 @(private = "file")
 create_render_pipeline :: proc() -> wgpu.RenderPipeline {
-	shader_source_bytes, _ := os.read_entire_file("shader.wgsl")
+	shader_source_bytes, _ := os.read_entire_file("./app/shader.wgsl")
 	shader_source := strings.clone_from_bytes(shader_source_bytes)
 	delete(shader_source_bytes)
 	shader_source_raw := strings.clone_to_cstring(shader_source)
@@ -250,7 +250,7 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 
 @(private = "file")
 create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint) {
-	geometry := load_geometry("geometry.txt")
+	geometry := load_geometry("./app/geometry.txt")
 	defer destroy_geometry(geometry)
 
 	vertex_buffer := wgpu.DeviceCreateBuffer(
@@ -357,4 +357,3 @@ request_adapter :: proc(instance: wgpu.Instance) -> wgpu.Adapter {
 
 	return out.adapter
 }
-

@@ -1,5 +1,6 @@
 package main
 
+import "app"
 import "core:fmt"
 import "core:log"
 import "core:mem"
@@ -32,10 +33,9 @@ main :: proc() {
 		}
 	}
 
-	init()
+	app.init()
 
-	run()
+	app.run()
 
-	destroy()
+	app.destroy()
 }
-
