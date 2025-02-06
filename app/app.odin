@@ -16,17 +16,20 @@ WINDOW_HEIGHT :: 480
 
 @(private = "file")
 State :: struct {
-	window:          glfw.WindowHandle,
-	surface:         wgpu.Surface,
-	device:          wgpu.Device,
-	queue:           wgpu.Queue,
-	render_pipeline: wgpu.RenderPipeline,
-	texture_format:  wgpu.TextureFormat,
-	vertex_buffer:   wgpu.Buffer,
-	vertex_count:    uint,
-	index_buffer:    wgpu.Buffer,
-	index_count:     uint,
-	uniform_buffer:  wgpu.Buffer,
+	window:            glfw.WindowHandle,
+	surface:           wgpu.Surface,
+	device:            wgpu.Device,
+	queue:             wgpu.Queue,
+	render_pipeline:   wgpu.RenderPipeline,
+	texture_format:    wgpu.TextureFormat,
+	vertex_buffer:     wgpu.Buffer,
+	vertex_count:      uint,
+	index_buffer:      wgpu.Buffer,
+	index_count:       uint,
+	uniform_buffer:    wgpu.Buffer,
+	pipeline_layout:   wgpu.PipelineLayout,
+	bind_group_layout: wgpu.BindGroupLayout,
+	bind_group:        wgpu.BindGroup,
 }
 
 @(private = "file")
@@ -75,11 +78,16 @@ init :: proc() {
 	)
 
 	// Render pipeline
-	state.render_pipeline = create_render_pipeline()
+	state.render_pipeline, state.pipeline_layout, state.bind_group_layout = create_render_pipeline(
+		
+	)
 
 	// Vertex position buffer
 	state.vertex_buffer, state.vertex_count, state.index_buffer, state.index_count, state.uniform_buffer =
 		create_buffers()
+
+	// Bind groups
+	state.bind_group = create_bind_groups()
 }
 
 run :: proc() {
@@ -118,6 +126,7 @@ run :: proc() {
 			0,
 			wgpu.BufferGetSize(state.index_buffer),
 		)
+		wgpu.RenderPassEncoderSetBindGroup(render_pass_encoder, 0, state.bind_group)
 		wgpu.RenderPassEncoderDrawIndexed(render_pass_encoder, u32(state.index_count), 1, 0, 0, 0)
 		wgpu.RenderPassEncoderEnd(render_pass_encoder)
 		wgpu.RenderPassEncoderRelease(render_pass_encoder)
@@ -137,6 +146,9 @@ run :: proc() {
 }
 
 destroy :: proc() {
+	wgpu.BindGroupRelease(state.bind_group)
+	wgpu.BindGroupLayoutRelease(state.bind_group_layout)
+	wgpu.PipelineLayoutRelease(state.pipeline_layout)
 	wgpu.BufferRelease(state.uniform_buffer)
 	wgpu.BufferRelease(state.index_buffer)
 	wgpu.BufferRelease(state.vertex_buffer)
@@ -172,7 +184,12 @@ get_next_texture_view :: proc() -> wgpu.TextureView {
 }
 
 @(private = "file")
-create_render_pipeline :: proc() -> wgpu.RenderPipeline {
+create_render_pipeline :: proc(
+) -> (
+	wgpu.RenderPipeline,
+	wgpu.PipelineLayout,
+	wgpu.BindGroupLayout,
+) {
 	shader_source_bytes, _ := os.read_entire_file("./app/shader.wgsl")
 	shader_source := strings.clone_from_bytes(shader_source_bytes)
 	delete(shader_source_bytes)
@@ -195,6 +212,29 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 		wgpu.VertexAttribute{format = .Float32x2, offset = 0, shaderLocation = 0},
 		wgpu.VertexAttribute{format = .Float32x3, offset = 2 * size_of(f32), shaderLocation = 1},
 	}
+
+	bind_group_layout := wgpu.DeviceCreateBindGroupLayout(
+		state.device,
+		&wgpu.BindGroupLayoutDescriptor {
+			entryCount = 1,
+			entries = &wgpu.BindGroupLayoutEntry {
+				binding = 0,
+				visibility = {.Vertex},
+				buffer = wgpu.BufferBindingLayout {
+					type = .Uniform,
+					minBindingSize = 4 * size_of(f32),
+				},
+			},
+		},
+	)
+
+	pipeline_layout := wgpu.DeviceCreatePipelineLayout(
+		state.device,
+		&wgpu.PipelineLayoutDescriptor {
+			bindGroupLayoutCount = 1,
+			bindGroupLayouts = &bind_group_layout,
+		},
+	)
 
 	render_pipeline := wgpu.DeviceCreateRenderPipeline(
 		state.device,
@@ -242,12 +282,30 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 				mask = ~u32(0),
 				alphaToCoverageEnabled = false,
 			},
+			layout = pipeline_layout,
 		},
 	)
 
 	wgpu.ShaderModuleRelease(shader_module)
 
-	return render_pipeline
+	return render_pipeline, pipeline_layout, bind_group_layout
+}
+
+@(private = "file")
+create_bind_groups :: proc() -> wgpu.BindGroup {
+	return wgpu.DeviceCreateBindGroup(
+		state.device,
+		&wgpu.BindGroupDescriptor {
+			entryCount = 1,
+			entries = &wgpu.BindGroupEntry {
+				binding = 0,
+				buffer = state.uniform_buffer,
+				offset = 0,
+				size = wgpu.BufferGetSize(state.uniform_buffer),
+			},
+			layout = state.bind_group_layout,
+		},
+	)
 }
 
 @(private = "file")
