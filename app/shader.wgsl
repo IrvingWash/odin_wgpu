@@ -1,4 +1,9 @@
-@group(0) @binding(0) var<uniform> uTime: f32;
+struct MyUniforms {
+    color: vec4f,
+    time: f32,
+};
+
+@group(0) @binding(0) var<uniform> uMyUniforms: MyUniforms;
 
 struct VertexInput {
     @location(0) vertex_position: vec2f,
@@ -16,7 +21,7 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
     let ratio = 640.0 / 480.0;
     var offset = vec2f(-0.6875, -0.463);
-    offset += 0.3 * vec2f(cos(uTime), sin(uTime));
+    offset += 0.3 * vec2f(cos(uMyUniforms.time), sin(uMyUniforms.time));
 
     let position_with_offset = input.vertex_position + offset;
 
@@ -28,5 +33,5 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4f {
-    return vec4f(input.color, 1.0);
+    return vec4f(input.color * uMyUniforms.color.rgb, 1.0);
 }

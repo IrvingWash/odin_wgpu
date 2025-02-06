@@ -34,6 +34,13 @@ State :: struct {
 @(private = "file")
 state := State{}
 
+@(private = "file")
+MyUniforms :: struct {
+	color: [4]f32,
+	time:  f32,
+	pad:   [3]f32,
+}
+
 init :: proc() {
 	// FPS manager
 	fps_manager_init(60)
@@ -128,8 +135,13 @@ run :: proc() {
 			0,
 			wgpu.BufferGetSize(state.index_buffer),
 		)
-		current_time: f32 = f32(glfw.GetTime())
-		wgpu.QueueWriteBuffer(state.queue, state.uniform_buffer, 0, &current_time, size_of(f32))
+		wgpu.QueueWriteBuffer(
+			state.queue,
+			state.uniform_buffer,
+			0,
+			&MyUniforms{time = f32(glfw.GetTime()), color = {0, 1, 0.4, 1}},
+			size_of(MyUniforms),
+		)
 		wgpu.RenderPassEncoderSetBindGroup(render_pass_encoder, 0, state.bind_group)
 		wgpu.RenderPassEncoderDrawIndexed(render_pass_encoder, u32(state.index_count), 1, 0, 0, 0)
 		wgpu.RenderPassEncoderEnd(render_pass_encoder)
@@ -217,10 +229,10 @@ create_render_pipeline :: proc() -> (wgpu.RenderPipeline, wgpu.BindGroupLayout) 
 			entryCount = 1,
 			entries = &wgpu.BindGroupLayoutEntry {
 				binding = 0,
-				visibility = {.Vertex},
+				visibility = {.Vertex, .Fragment},
 				buffer = wgpu.BufferBindingLayout {
 					type = .Uniform,
-					minBindingSize = 4 * size_of(f32),
+					minBindingSize = size_of(MyUniforms),
 				},
 			},
 		},
@@ -344,7 +356,14 @@ create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint, wgpu.Buffer) 
 
 	uniform_buffer := wgpu.DeviceCreateBuffer(
 		state.device,
-		&wgpu.BufferDescriptor{size = 4 * size_of(f32), usage = {.CopyDst, .Uniform}},
+		&wgpu.BufferDescriptor{size = size_of(MyUniforms), usage = {.CopyDst, .Uniform}},
+	)
+	wgpu.QueueWriteBuffer(
+		state.queue,
+		uniform_buffer,
+		0,
+		&MyUniforms{time = 1, color = {0, 1, 0.4, 1}},
+		size_of(MyUniforms),
 	)
 
 	return vertex_buffer,
