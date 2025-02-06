@@ -1,9 +1,9 @@
 package main
 
 import "app"
-import "core:fmt"
-import "core:log"
-import "core:mem"
+@(require) import "core:fmt"
+@(require) import "core:log"
+@(require) import "core:mem"
 
 main :: proc() {
 	when ODIN_DEBUG {
@@ -39,3 +39,4 @@ main :: proc() {
 
 	app.destroy()
 }
+
