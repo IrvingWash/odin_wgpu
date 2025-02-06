@@ -26,6 +26,7 @@ State :: struct {
 	vertex_count:    uint,
 	index_buffer:    wgpu.Buffer,
 	index_count:     uint,
+	uniform_buffer:  wgpu.Buffer,
 }
 
 @(private = "file")
@@ -77,7 +78,7 @@ init :: proc() {
 	state.render_pipeline = create_render_pipeline()
 
 	// Vertex position buffer
-	state.vertex_buffer, state.vertex_count, state.index_buffer, state.index_count =
+	state.vertex_buffer, state.vertex_count, state.index_buffer, state.index_count, state.uniform_buffer =
 		create_buffers()
 }
 
@@ -136,6 +137,7 @@ run :: proc() {
 }
 
 destroy :: proc() {
+	wgpu.BufferRelease(state.uniform_buffer)
 	wgpu.BufferRelease(state.index_buffer)
 	wgpu.BufferRelease(state.vertex_buffer)
 	wgpu.RenderPipelineRelease(state.render_pipeline)
@@ -249,7 +251,7 @@ create_render_pipeline :: proc() -> wgpu.RenderPipeline {
 }
 
 @(private = "file")
-create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint) {
+create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint, wgpu.Buffer) {
 	geometry := load_geometry("./app/geometry.txt")
 	defer destroy_geometry(geometry)
 
@@ -283,7 +285,18 @@ create_buffers :: proc() -> (wgpu.Buffer, uint, wgpu.Buffer, uint) {
 		uint(wgpu.BufferGetSize(index_buffer)),
 	)
 
-	return vertex_buffer, len(geometry.vertices) / 5, index_buffer, len(geometry.indices)
+	uniform_buffer := wgpu.DeviceCreateBuffer(
+		state.device,
+		&wgpu.BufferDescriptor{size = 4 * size_of(f32), usage = {.CopyDst, .Uniform}},
+	)
+	current_time: f32 = 1
+	wgpu.QueueWriteBuffer(state.queue, uniform_buffer, 0, &current_time, size_of(f32))
+
+	return vertex_buffer,
+		len(geometry.vertices) / 5,
+		index_buffer,
+		len(geometry.indices),
+		uniform_buffer
 }
 
 @(private = "file")
@@ -357,3 +370,4 @@ request_adapter :: proc(instance: wgpu.Instance) -> wgpu.Adapter {
 
 	return out.adapter
 }
+
