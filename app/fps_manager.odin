@@ -23,7 +23,7 @@ cap_fps :: proc() {
 	time_to_sleep := fps_manager.time_per_frame - time.diff(fps_manager.prev_time, current_time)
 
 	when ODIN_DEBUG {
-		log.info(time_to_sleep)
+		log.info("Time to sleep: ", time_to_sleep)
 	}
 
 	if time_to_sleep > 0 {

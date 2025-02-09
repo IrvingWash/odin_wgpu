@@ -78,3 +78,4 @@ destroy_geometry :: proc(geometry: Geometry) {
 	delete(geometry.vertices)
 	delete(geometry.indices)
 }
+
